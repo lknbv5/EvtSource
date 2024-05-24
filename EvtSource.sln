@@ -1,9 +1,11 @@
 ﻿
 Microsoft Visual Studio Solution File, Format Version 12.00
-# Visual Studio 15
-VisualStudioVersion = 15.0.26730.8
+# Visual Studio Version 17
+VisualStudioVersion = 17.9.34622.214
 MinimumVisualStudioVersion = 10.0.40219.1
 Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "EvtSource", "EvtSource\EvtSource.csproj", "{88A927DA-E0E0-4C6C-A40F-818229E53EF1}"
+EndProject
+Project("{9A19103F-16F7-4668-BE54-9A1E7A4F7556}") = "Client", "Client\Client.csproj", "{C21C961A-5A04-4965-97B3-11491DCE982C}"
 EndProject
 Global
 	GlobalSection(SolutionConfigurationPlatforms) = preSolution
@@ -15,6 +17,10 @@ Global
 		{88A927DA-E0E0-4C6C-A40F-818229E53EF1}.Debug|Any CPU.Build.0 = Debug|Any CPU
 		{88A927DA-E0E0-4C6C-A40F-818229E53EF1}.Release|Any CPU.ActiveCfg = Release|Any CPU
 		{88A927DA-E0E0-4C6C-A40F-818229E53EF1}.Release|Any CPU.Build.0 = Release|Any CPU
+		{C21C961A-5A04-4965-97B3-11491DCE982C}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C21C961A-5A04-4965-97B3-11491DCE982C}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C21C961A-5A04-4965-97B3-11491DCE982C}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C21C961A-5A04-4965-97B3-11491DCE982C}.Release|Any CPU.Build.0 = Release|Any CPU
 	EndGlobalSection
 	GlobalSection(SolutionProperties) = preSolution
 		HideSolutionNode = FALSE
