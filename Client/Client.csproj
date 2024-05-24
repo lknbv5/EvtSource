@@ -12,7 +12,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\..\EvtSource\EvtSource\EvtSource.csproj" />
+    <ProjectReference Include="..\EvtSource\EvtSource.csproj" />
   </ItemGroup>
 
 </Project>
