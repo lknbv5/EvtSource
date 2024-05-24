@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Net.Http;
+using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Threading.Tasks;
 
@@ -18,6 +19,9 @@ namespace EvtSource
         private HttpClient Hc;
         private Stream Stream = null;
         private readonly Uri Uri;
+        private HttpContent HttpContent=null;
+        //请求类型, 0:get,1:post
+        private readonly int MethodType=0;
 
         private volatile bool _IsDisposed = false;
         public bool IsDisposed => _IsDisposed;
@@ -42,7 +46,18 @@ namespace EvtSource
             Hc = new HttpClient(handler ?? new HttpClientHandler());
         }
 
-
+        public EventSourceReader(Uri url, HttpContent content, params (string, string)[] clientHeaders)
+        {
+            Uri = url;
+            MethodType = 1;
+            HttpContent = content;
+            Hc = new HttpClient(new HttpClientHandler());
+            foreach (var item in clientHeaders)
+            {
+                Hc.DefaultRequestHeaders.TryAddWithoutValidation(item.Item1, item.Item2);
+            }
+            
+        }
         /// <summary>
         /// Returns instantly and starts listening
         /// </summary>
@@ -94,83 +109,167 @@ namespace EvtSource
                     
                     Hc.DefaultRequestHeaders.TryAddWithoutValidation("Last-Event-Id", LastEventId);
                 }
-                using (HttpResponseMessage response = await Hc.GetAsync(Uri, HttpCompletionOption.ResponseHeadersRead))
+                if (MethodType==0)//get
                 {
-                    response.EnsureSuccessStatusCode();
-                    if (response.Headers.TryGetValues("content-type", out IEnumerable<string> ctypes) || ctypes?.Contains("text/event-stream") == false)
+                    using (HttpResponseMessage response = await Hc.GetAsync(Uri, HttpCompletionOption.ResponseHeadersRead))
                     {
-                        throw new ArgumentException("Specified URI does not return server-sent events");
-                    }
-
-                    Stream = await response.Content.ReadAsStreamAsync();
-                    using (var sr = new StreamReader(Stream))
-                    {
-                        string evt = DefaultEventType;
-                        string id = string.Empty;
-                        var data = new StringBuilder(string.Empty);
-
-                        while (true)
+                        response.EnsureSuccessStatusCode();
+                        if (response.Headers.TryGetValues("content-type", out IEnumerable<string> ctypes) || ctypes?.Contains("text/event-stream") == false)
                         {
-                            string line = await sr.ReadLineAsync();
-                            if (line == string.Empty)
+                            throw new ArgumentException("Specified URI does not return server-sent events");
+                        }
+
+                        Stream = await response.Content.ReadAsStreamAsync();
+                        using (var sr = new StreamReader(Stream))
+                        {
+                            string evt = DefaultEventType;
+                            string id = string.Empty;
+                            var data = new StringBuilder(string.Empty);
+
+                            while (true)
                             {
-                                // double newline, dispatch message and reset for next
-                                if (data.Length > 0)
+                                string line = await sr.ReadLineAsync();
+                                if (line == string.Empty)
                                 {
-                                    MessageReceived?.Invoke(this, new EventSourceMessageEventArgs(data.ToString().Trim(), evt, id));
+                                    // double newline, dispatch message and reset for next
+                                    if (data.Length > 0)
+                                    {
+                                        MessageReceived?.Invoke(this, new EventSourceMessageEventArgs(data.ToString().Trim(), evt, id));
+                                    }
+                                    data.Clear();
+                                    id = string.Empty;
+                                    evt = DefaultEventType;
+                                    continue;
                                 }
-                                data.Clear();
-                                id = string.Empty;
-                                evt = DefaultEventType;
-                                continue;
-                            }
-                            else if (line.First() == ':')
-                            {
-                                // Ignore comments
-                                continue;
-                            }
+                                else if (line.First() == ':')
+                                {
+                                    // Ignore comments
+                                    continue;
+                                }
 
-                            int dataIndex = line.IndexOf(':');
-                            string field;
-                            if (dataIndex == -1)
-                            {
-                                dataIndex = line.Length;
-                                field = line;
-                            }
-                            else
-                            {
-                                field = line.Substring(0, dataIndex);
-                                dataIndex += 1;
-                            }
+                                int dataIndex = line.IndexOf(':');
+                                string field;
+                                if (dataIndex == -1)
+                                {
+                                    dataIndex = line.Length;
+                                    field = line;
+                                }
+                                else
+                                {
+                                    field = line.Substring(0, dataIndex);
+                                    dataIndex += 1;
+                                }
 
-                            string value = line.Substring(dataIndex).Trim();
+                                string value = line.Substring(dataIndex).Trim();
 
-                            switch (field)
-                            {
-                                case "event":
-                                    // Set event type
-                                    evt = value;
-                                    break;
-                                case "data":
-                                    // Append a line to data using a single \n as EOL
-                                    data.Append($"{value}\n");
-                                    break;
-                                case "retry":
-                                    // Set reconnect delay for next disconnect
-                                    int.TryParse(value, out ReconnectDelay);
-                                    break;
-                                case "id":
-                                    // Set ID
-                                    LastEventId = value;
-                                    id = LastEventId;
-                                    break;
-                                default:
-                                    // Ignore other fields
-                                    break;
+                                switch (field)
+                                {
+                                    case "event":
+                                        // Set event type
+                                        evt = value;
+                                        break;
+                                    case "data":
+                                        // Append a line to data using a single \n as EOL
+                                        data.Append($"{value}\n");
+                                        break;
+                                    case "retry":
+                                        // Set reconnect delay for next disconnect
+                                        int.TryParse(value, out ReconnectDelay);
+                                        break;
+                                    case "id":
+                                        // Set ID
+                                        LastEventId = value;
+                                        id = LastEventId;
+                                        break;
+                                    default:
+                                        // Ignore other fields
+                                        break;
+                                }
                             }
                         }
                     }
                 }
+                else//post
+                {
+                    using (HttpResponseMessage response = await Hc.PostAsync(Uri.ToString(), HttpContent))
+                    {
+                        response.EnsureSuccessStatusCode();
+                        if (response.Headers.TryGetValues("content-type", out IEnumerable<string> ctypes) || ctypes?.Contains("text/event-stream") == false)
+                        {
+                            throw new ArgumentException("Specified URI does not return server-sent events");
+                        }
+
+                        Stream = await response.Content.ReadAsStreamAsync();
+                        using (var sr = new StreamReader(Stream))
+                        {
+                            string evt = DefaultEventType;
+                            string id = string.Empty;
+                            var data = new StringBuilder(string.Empty);
+
+                            while (true)
+                            {
+                                string line = await sr.ReadLineAsync();
+                                if (line == string.Empty)
+                                {
+                                    // double newline, dispatch message and reset for next
+                                    if (data.Length > 0)
+                                    {
+                                        MessageReceived?.Invoke(this, new EventSourceMessageEventArgs(data.ToString().Trim(), evt, id));
+                                    }
+                                    data.Clear();
+                                    id = string.Empty;
+                                    evt = DefaultEventType;
+                                    continue;
+                                }
+                                else if (line.First() == ':')
+                                {
+                                    // Ignore comments
+                                    continue;
+                                }
+
+                                int dataIndex = line.IndexOf(':');
+                                string field;
+                                if (dataIndex == -1)
+                                {
+                                    dataIndex = line.Length;
+                                    field = line;
+                                }
+                                else
+                                {
+                                    field = line.Substring(0, dataIndex);
+                                    dataIndex += 1;
+                                }
+
+                                string value = line.Substring(dataIndex).Trim();
+
+                                switch (field)
+                                {
+                                    case "event":
+                                        // Set event type
+                                        evt = value;
+                                        break;
+                                    case "data":
+                                        // Append a line to data using a single \n as EOL
+                                        data.Append($"{value}\n");
+                                        break;
+                                    case "retry":
+                                        // Set reconnect delay for next disconnect
+                                        int.TryParse(value, out ReconnectDelay);
+                                        break;
+                                    case "id":
+                                        // Set ID
+                                        LastEventId = value;
+                                        id = LastEventId;
+                                        break;
+                                    default:
+                                        // Ignore other fields
+                                        break;
+                                }
+                            }
+                        }
+                    }
+                }
+                
             }
             catch (Exception ex)
             {
